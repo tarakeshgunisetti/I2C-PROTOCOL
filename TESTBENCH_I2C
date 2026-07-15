@@ -1,0 +1,62 @@
+module master_tb;
+parameter SYS_CLK=2000000,I2C_CLK=1000000;
+reg clk,rst_n;
+reg [6:0] slv_addr;
+reg rw;
+reg [7:0] reg_addr;
+reg [7:0] wdata;
+wire [7:0] rdata;
+wire SDA;
+wire SCL;
+wire done;
+  
+  top_i2c#(SYS_CLK,I2C_CLK)dut(.*);
+  
+  
+  always #250 clk=~clk;
+  
+  initial begin
+    clk=0;
+    rst_n=0;
+    $dumpfile("master.vcd");
+    $dumpvars(1,master_tb);
+    $monitor("Time=%0t  ,rst_n=%b,slv_addr=%b,rw=%b,reg_addr=%b,wdata=%b,rdata=%b,SDA=%b,ps=%d,ns=%d,count=%d MEM=%b",$time,rst_n,slv_addr,rw,reg_addr,wdata,rdata,dut.SDA,dut.M1.ps,dut.M1.ns,dut.M1.count,dut.S1.slave_mem[slv_addr][reg_addr][dut.M1.count]);
+    
+    #500
+    rst_n=1;
+    slv_addr=7'b1010011;
+    rw=0;
+    reg_addr=8'b11001010;
+    wdata=8'b11110001;
+    
+    
+    
+    @(posedge done); 
+    $strobe("----------------------------------------------------------------------------------------------------------------------------");
+    slv_addr=7'b1101110;
+    rw=0;
+    reg_addr=8'b00001010;
+    wdata=8'b10001001;
+    
+    
+      @(posedge done); 
+    $strobe("----------------------------------------------------------------------------------------------------------------------------");
+    slv_addr=7'b1101110;
+    rw=1;
+    reg_addr=8'b00001010;
+ 
+    
+    @(posedge done); 
+    $strobe("----------------------------------------------------------------------------------------------------------------------------");
+    
+    slv_addr=7'b1010011;
+   rw=1;
+    reg_addr=8'b11001010;
+    
+    
+   
+    #(32*1000)
+    $finish;
+  end
+    
+endmodule
