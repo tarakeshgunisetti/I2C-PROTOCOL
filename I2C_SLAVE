@@ -1,0 +1,124 @@
+module I2C_SLAVE#(SYS_CLK=2000000,I2C_CLK=1000000)
+  (inout SDA,
+   input SCL,
+   input rst_n);
+  
+parameter IDLE=0,START=1,SLV_ADDRESS=2,RW=3,ACK_RW=4,REG_ADDRESS=5,ACK_REG=6, DATA=7,ACK_DATA=8,STOP=9;
+  
+  //slave 1
+  reg [7:0] slave_mem[0:127][0:255];
+  reg [6:0] slv_addr;
+  reg [7:0] reg_addr;
+  
+    
+  reg [3:0] ps,ns;
+  reg sda;
+  reg sda_oe; // enable for inout  pin,bcoz when slave wants to ddrivesda ,master need to release the sda
+  assign SDA=sda_oe?sda:1'bz;
+  
+  // counter
+  reg [3:0] count;
+  reg rw;
+  
+  always @(negedge SCL or negedge rst_n)
+    begin
+      if(!rst_n)
+        begin
+          ps<=IDLE;
+          
+        end
+      else 
+          ps<=ns;
+    end
+  
+   always @(negedge SCL or negedge rst_n)
+    begin
+      if(!rst_n)
+        begin
+          count<=0;
+        end
+      else if((ps==SLV_ADDRESS && count==6 )||(ps==REG_ADDRESS && count==7 )|| (ps==DATA && count==7 ))
+        count<=0;
+      else if(ps==SLV_ADDRESS ||ps==REG_ADDRESS|| ps==DATA )
+        begin
+          count=count+1;
+        end
+      
+    end
+  
+  
+   always @(*)
+    begin
+      case(ps)
+        IDLE:begin
+          sda_oe=0;
+          ns=START;
+          end
+        
+        START:begin
+          ns=SLV_ADDRESS;
+        end
+        
+        SLV_ADDRESS:begin
+          slv_addr[count]=SDA; 
+          ns=(count==6)?RW:SLV_ADDRESS;
+        end
+          
+        RW:begin
+          rw=SDA;
+          ns=ACK_RW;
+        end
+        
+         ACK_RW:begin
+           sda_oe=1;
+           sda=0;
+           ns=REG_ADDRESS;
+        end
+        
+        REG_ADDRESS:begin
+          sda_oe=0;
+          reg_addr[count]=SDA; 
+          ns=(count==7)?ACK_REG:REG_ADDRESS;
+         
+        end
+          
+        ACK_REG:begin
+           sda_oe=1;
+          sda=0;
+          ns=DATA;
+        end
+        
+        DATA:begin
+          if(!rw)
+            begin
+              sda_oe=0;
+              slave_mem[slv_addr][reg_addr][count]=SDA; 
+              ns=(count==7)?ACK_DATA:DATA;
+             
+            end
+          else
+            begin
+              sda_oe=1;
+              sda=slave_mem[slv_addr][reg_addr][count]; 
+              ns=(count==7)?ACK_DATA:DATA;
+           
+            end
+        end
+        
+        ACK_DATA:begin
+           sda_oe=1;
+          sda=0;
+          ns=STOP;
+        end
+        
+        STOP:begin
+           sda_oe=0;
+          ns=IDLE;
+        end
+        default:ns=IDLE;
+      endcase
+    end
+  
+ 
+  
+endmodule
