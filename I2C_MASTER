@@ -1,0 +1,133 @@
+`include "scl_gen.sv"
+
+module I2C_MASTER#(SYS_CLK=2000000,I2C_CLK=1000000)
+  				(input clk,rst_n,
+                  input [6:0] slv_addr,
+                  input rw,
+                  input [7:0] reg_addr,
+                  input [7:0] wdata,
+                  output reg [7:0] rdata,
+                  inout  SDA,
+                output reg SCL,
+                output reg  done);
+
+                  
+  
+  parameter IDLE=0,START=1,SLV_ADDRESS=2,RW=3,ACK_RW=4,REG_ADDRESS=5,ACK_REG=6, DATA=7,ACK_DATA=8,STOP=9;
+  
+  reg [3:0] ps,ns;
+  reg sda;
+  reg sda_oe; // enable for inout  pin,bcoz when slave wants to ddrivesda ,master need to release the sda
+  assign SDA=sda_oe?sda:1'bz;
+  
+    // counter
+  reg [3:0] count;
+
+  SCL_gen #(SYS_CLK,I2C_CLK)SCL1(clk,rst_n,SCL);              
+  
+  always @(negedge SCL or negedge rst_n)
+    begin
+      if(!rst_n)
+        begin
+          ps<=IDLE;
+        end
+      else 
+          ps<=ns;
+    end
+  
+
+  always @(negedge SCL or negedge rst_n)
+    begin
+      if(!rst_n)
+        begin
+          count<=0;
+        end
+      else if((ps==SLV_ADDRESS && count==6 )||(ps==REG_ADDRESS && count==7 )|| (ps==DATA && count==7 ))
+        count<=0;
+      else if(ps==SLV_ADDRESS ||ps==REG_ADDRESS|| ps==DATA )
+        begin
+          count=count+1;
+        end
+      
+    end
+      
+  always @(*)
+    begin
+      case(ps)
+        IDLE:begin
+          sda_oe=1;
+          sda=1;
+          ns=START;
+          rdata=0;
+          done=0;
+          end
+        
+        START:begin
+           sda_oe=1;
+          sda=0;
+          ns=SLV_ADDRESS;
+        end
+        
+        SLV_ADDRESS:begin
+           sda_oe=1;
+          sda=slv_addr[count]; 
+          ns=(count==6)?RW:SLV_ADDRESS;
+         
+        end
+          
+        RW:begin
+           sda_oe=1;
+          sda=rw;
+          ns=ACK_RW;
+        end
+        
+         ACK_RW:begin
+           sda_oe=0;
+          ns=SDA?IDLE:REG_ADDRESS;
+        end
+        
+        REG_ADDRESS:begin
+           sda_oe=1;
+          sda=reg_addr[count]; 
+          ns=(count==7)?ACK_REG:REG_ADDRESS;
+         
+        end
+          
+        ACK_REG:begin
+           sda_oe=0;
+          ns=SDA?IDLE:DATA;
+        end
+        
+        DATA:begin
+           
+          if(!rw)
+            begin
+              sda_oe=1;
+              sda=wdata[count]; 
+              ns=(count==7)?ACK_DATA:DATA;
+             
+            end
+          else
+            begin
+              sda_oe=0;
+              rdata[count]=SDA; 
+              ns=(count==7)?ACK_DATA:DATA;
+           
+            end
+        end
+        
+        ACK_DATA:begin
+           sda_oe=0;
+          ns=SDA?IDLE:STOP;
+        end
+        
+        STOP:begin
+           sda_oe=1;
+          sda=1;
+          ns=IDLE;
+          done=1;
+        end
+        default:ns=IDLE;
+      endcase
+    end
+endmodule
