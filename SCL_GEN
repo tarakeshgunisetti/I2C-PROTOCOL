@@ -1,0 +1,19 @@
+module SCL_gen#(SYS_CLK,I2C_CLK)(input clk,rst_n,output reg SCL);
+parameter cycles=SYS_CLK/I2C_CLK;
+  integer i;
+  always @(negedge clk or negedge rst_n)
+    begin
+      if(!rst_n)
+        begin
+        i<=1;
+        SCL<=1;
+        end    
+      else 
+        i<=i+1;
+      if(i==cycles/2)
+        begin
+          SCL<=~SCL;
+          i<=1;
+        end
+    end
+endmodule
